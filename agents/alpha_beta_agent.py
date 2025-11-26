@@ -14,30 +14,38 @@ class StudentAgent(Agent):
   add any helper functionalities needed for your agent.
   """
       
-  def minimax(self, chess_board, player, opponent, depth, max_player):
+  def alpha_beta_pruning(self, chess_board, player, opponent, depth, max_player, alpha, beta):
     done, p1, p2 = check_endgame(chess_board)
     if depth == 0 or done:
       return p1 - p2 if max_player == 1 else p2 - p1
     all_moves = get_valid_moves(chess_board, player)
     if len(all_moves) == 0:
-      return self.minimax(chess_board, opponent, player, depth - 1, max_player)
+      return self.alpha_beta_pruning(chess_board, opponent, player, depth - 1, max_player, alpha, beta)
     
     if player == max_player:
       best_move = float('-inf')
       for i in all_moves:
         temp_board = deepcopy(chess_board)
         execute_move(temp_board, i, player)
-        move_value = self.minimax(temp_board, opponent, player, depth - 1, max_player)
+        move_value = self.alpha_beta_pruning(temp_board, opponent, player, depth - 1, max_player, alpha, beta)
+      
         if move_value > best_move:
           best_move = move_value
+        alpha = max(alpha, best_move)
+
+        if alpha >= beta:
+          break
     else:
         best_move = float('inf')
         for i in all_moves:
           temp_board = deepcopy(chess_board)
           execute_move(temp_board, i, player)
-          move_value = self.minimax(temp_board, opponent, player, depth - 1, max_player)
+          move_value = self.alpha_beta_pruning(temp_board, opponent, player, depth - 1, max_player, alpha, beta)
           if move_value < best_move:
             best_move = move_value
+          beta = min(beta, best_move)
+          if alpha >= beta:
+            break
 
     return best_move
 
@@ -52,7 +60,7 @@ class StudentAgent(Agent):
       temp_board = deepcopy(chess_board)
       execute_move(temp_board, i, player)
 
-      move_value = self.minimax(temp_board, opponent, player, depth - 1, max_player)
+      move_value = self.alpha_beta_pruning(temp_board, opponent, player, depth - 1, max_player, float('-inf'), float('inf'))
       if move_value > best_score:
         best_score = move_value
         best_move = i
@@ -66,6 +74,7 @@ class StudentAgent(Agent):
     super(StudentAgent, self).__init__()
     self.name = "AlphaBetaAgent"
     self.max_depth = 2
+    self.count = 0
 
   def step(self, chess_board, player, opponent):
     """
@@ -92,7 +101,8 @@ class StudentAgent(Agent):
     time_taken = time.time() - start_time
 
     print("My AI's turn took ", time_taken, "seconds.")
-
+    print("step count: ", self.count)
+    self.count += 1
     # Dummy return (you should replace this with your actual logic)
     # Returning a random valid move as an example
     return move
