@@ -63,11 +63,6 @@ class AlphaBetaAgentFinal(Agent):
             self.moves.move_to_end(board_id)
             all_moves = self.moves[board_id]
 
-        # The board ID may have been evicted from the cache
-        # If it was a previous root node, it will be in this cache
-        elif board_id in self.root_ordered_moves:
-            all_moves = self.root_ordered_moves[board_id]
-
         else:
             move_list = get_valid_moves(chess_board, player)
             self.moves[board_id] = move_list
@@ -81,6 +76,8 @@ class AlphaBetaAgentFinal(Agent):
             return self.alpha_beta_pruning(
                 chess_board, opponent, player, depth - 1, max_player, alpha, beta
             )
+        
+        move_scores = dict()
 
         if player == max_player:
             # Alpha value for this node
@@ -96,6 +93,8 @@ class AlphaBetaAgentFinal(Agent):
                 move_value = self.alpha_beta_pruning(
                     temp_board, opponent, player, depth - 1, max_player, alpha, beta
                 )
+
+                move_scores[(i.get_src(), i.get_dest())] = move_value
 
                 # Keep track of the best move found so far (from the max-player's perspective),
                 # and update alpha for this node if we found a better move
@@ -124,6 +123,8 @@ class AlphaBetaAgentFinal(Agent):
                     temp_board, opponent, player, depth - 1, max_player, alpha, beta
                 )
 
+                move_scores[(i.get_src(), i.get_dest())] = move_value
+
                 # Keep track of the best move found so far (from the min-player's perspective),
                 # and update beta for this node if we found a better move
                 if move_value < best_move:
@@ -134,6 +135,9 @@ class AlphaBetaAgentFinal(Agent):
                 if alpha >= beta:
                     break
 
+        # Only sort each depth once. Further sorting gives diminishing returns for the cost of sorting
+        if depth == 1:
+            self.moves[board_id] = sorted(all_moves, key=lambda x: move_scores.get((x.get_src(), x.get_dest()), 0), reverse=True)
         return best_move
 
     def find_best_move(self, chess_board, player, opponent, depth, alpha, beta):
@@ -145,11 +149,6 @@ class AlphaBetaAgentFinal(Agent):
             # Move the used board_id to the end to mark it recently used
             self.moves.move_to_end(board_id)
             all_moves = self.moves[board_id]
-
-        # The board ID may have been evicted from the cache
-        # If it was a previous root node, it will be in this cache
-        elif board_id in self.root_ordered_moves:
-            all_moves = self.root_ordered_moves[board_id]
         
         else:
             move_list = get_valid_moves(chess_board, player)
@@ -169,7 +168,7 @@ class AlphaBetaAgentFinal(Agent):
         max_player = player
 
         # Evaluate each move from the root and record the scores to sort them
-        move_scores = {}
+        move_scores = dict()
 
         for mv in all_moves:
             # Exit if we exceed the time-limit
@@ -206,10 +205,7 @@ class AlphaBetaAgentFinal(Agent):
                 break
 
         # Sort the moves for additional depth iterations, and possible future revisits.
-        # Duplication not really an issue, as root_ordered_moves cache will never exceed the
-        # amount of turns of a game (~50-60)
         self.moves[board_id] = sorted(all_moves, key=lambda x: move_scores.get((x.get_src(), x.get_dest()), 0), reverse=True)
-        self.root_ordered_moves[board_id] = self.moves[board_id]
       
         return best_move, best_score
 
@@ -224,13 +220,11 @@ class AlphaBetaAgentFinal(Agent):
         # Inspired by COMP 310 course at McGill
         self.moves = OrderedDict()
         self.board_id_map = dict()
-        self.root_ordered_moves = dict()
         self.next_board_id = 0
         # Maximum time per move
         self.time_limit = 1.99
         # Size limits for caches
-        self.max_moves_cache = 12000
-        self.max_board_id_map = 40000
+        self.max_moves_cache = 20000
 
         # Aspiration window initial delta, and previous score to
         # initialize the window around.
@@ -282,11 +276,11 @@ class AlphaBetaAgentFinal(Agent):
             
             # We never need delta to be greater than 10, as no turn can
             # change the score by more than 9.
-            # We reset delta to 6, as a smaller delta is better for aspiration search,
+            # We reset delta to 7, as a smaller delta is better for aspiration search,
             # and if we are playing against strong opponents, it is highly unlikely for us
-            # to affect the score by more than 6 in a single turn.
-            if self.delta > 6:
-                self.delta = 6
+            # to affect the score by more than 7 in a single turn.
+            if self.delta > 7:
+                self.delta = 7
 
             # If we found a candidate move within the aspiration window, update best move and score,
             # as deeper searches are more accurate
