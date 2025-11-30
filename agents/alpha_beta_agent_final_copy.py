@@ -40,12 +40,26 @@ class AlphaBetaAgentFinal(Agent):
         return self.board_id_map[key]
 
     def evaluate_board(self, chess_board, player):
-        p1_count = np.count_nonzero(chess_board == 1)
-        p2_count = np.count_nonzero(chess_board == 2)
+        p1_mask = (chess_board == 1)
+        p2_mask = (chess_board == 2)
 
+        p1_count = np.sum(p1_mask)
+        p2_count = np.sum(p2_mask)
+
+        weight_map = np.array([
+            [1,1,1,1,1,1,1],
+            [1,2,2,2,2,2,1],
+            [1,2,3,3,3,2,1],
+            [1,2,3,4,3,2,1],
+            [1,2,3,3,3,2,1],
+            [1,2,2,2,2,2,1],
+            [1,1,1,1,1,1,1]
+        ])
         score = p1_count - p2_count if player == 1 else p2_count - p1_count
-        return score
-
+        weighted_score_p1 = np.sum(self.weight_map[p1_mask])
+        weighted_score_p2 = np.sum(self.weight_map[p2_mask])
+        return score*0.9 + (weighted_score_p1 - weighted_score_p2)*0.1 if player == 1 else score*0.9 + (weighted_score_p2 - weighted_score_p1)*0.1
+ 
         return None
     def alpha_beta_pruning(
         self, chess_board, player, opponent, depth, max_player, alpha, beta
@@ -231,7 +245,7 @@ class AlphaBetaAgentFinal(Agent):
         self.board_id_map = dict()
         self.next_board_id = 0
         # Maximum time per move
-        self.time_limit = 1.97
+        self.time_limit = 1.95
         # Size limits for caches
         self.max_moves_cache = 20000
 
