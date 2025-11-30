@@ -9,7 +9,7 @@ from helpers import random_move, execute_move, check_endgame, get_valid_moves
 from collections import OrderedDict
 
 
-@register_agent("alpha_beta_agent_final")
+@register_agent("alpha_beta_agent_final_copy")
 class AlphaBetaAgentFinal(Agent):
     """
     A class for your implementation. Feel free to use this class to
@@ -39,7 +39,14 @@ class AlphaBetaAgentFinal(Agent):
         # Return the boards corresponding id
         return self.board_id_map[key]
 
+    def evaluate_board(self, chess_board, player):
+        p1_count = np.count_nonzero(chess_board == 1)
+        p2_count = np.count_nonzero(chess_board == 2)
 
+        score = p1_count - p2_count if player == 1 else p2_count - p1_count
+        return score
+
+        return None
     def alpha_beta_pruning(
         self, chess_board, player, opponent, depth, max_player, alpha, beta
     ):
@@ -52,8 +59,10 @@ class AlphaBetaAgentFinal(Agent):
 
         # Return the current score of the game if depth is 0 or game over
         done, p1, p2 = check_endgame(chess_board)
-        if depth == 0 or done:
-            return p1 - p2 if max_player == 1 else p2 - p1
+        if done:
+            return (p1-p2)*100 if max_player == 1 else (p2 - p1)*100
+        if depth == 0:
+            return self.evaluate_board(chess_board, max_player)
         board_id = self.get_board_id(chess_board, player)
 
         # Load the list of moves from this board from cache if available

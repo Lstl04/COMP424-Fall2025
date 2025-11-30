@@ -5,4 +5,5 @@ from .greedy_corners_agent import StudentAgent
 from .alpha_beta_agent import StudentAgent
 from .minimax_agent import StudentAgent
 from .mcts_agent import StudentAgent
-
+from .alpha_beta_agent_final import AlphaBetaAgentFinal
+from .alpha_beta_agent_final_copy import AlphaBetaAgentFinal

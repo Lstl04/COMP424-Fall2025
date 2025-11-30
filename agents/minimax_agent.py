@@ -65,7 +65,7 @@ class StudentAgent(Agent):
   def __init__(self):
     super(StudentAgent, self).__init__()
     self.name = "MinimaxAgent"
-    self.max_depth = 2
+    self.max_depth = 4
 
   def step(self, chess_board, player, opponent):
     """
