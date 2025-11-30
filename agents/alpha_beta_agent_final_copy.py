@@ -38,6 +38,23 @@ class AlphaBetaAgentFinal(Agent):
 
         # Return the boards corresponding id
         return self.board_id_map[key]
+    
+    def get_move_value(self, chess_board, move, player):
+        captures = 0
+        r, c = move.get_dest()
+        opponent = 3 - player
+        for dr in [-1, 0, 1]:
+            for dc in [-1, 0, 1]:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < 7 and 0 <= nc < 7:
+                    if chess_board[nr][nc] == opponent:
+                        captures += 1
+
+        sr, sc = move.get_src()
+        dist = max(abs(r - sr), abs(c - sc))
+        is_duplication = 1 if dist == 1 else 0
+        
+        return (2 * captures) + is_duplication
 
     def evaluate_board(self, chess_board, player):
         p1_mask = (chess_board == 1)
@@ -46,21 +63,12 @@ class AlphaBetaAgentFinal(Agent):
         p1_count = np.sum(p1_mask)
         p2_count = np.sum(p2_mask)
 
-        weight_map = np.array([
-            [1,1,1,1,1,1,1],
-            [1,2,2,2,2,2,1],
-            [1,2,3,3,3,2,1],
-            [1,2,3,4,3,2,1],
-            [1,2,3,3,3,2,1],
-            [1,2,2,2,2,2,1],
-            [1,1,1,1,1,1,1]
-        ])
         score = p1_count - p2_count if player == 1 else p2_count - p1_count
         weighted_score_p1 = np.sum(self.weight_map[p1_mask])
         weighted_score_p2 = np.sum(self.weight_map[p2_mask])
         return score*0.9 + (weighted_score_p1 - weighted_score_p2)*0.1 if player == 1 else score*0.9 + (weighted_score_p2 - weighted_score_p1)*0.1
  
-        return None
+        
     def alpha_beta_pruning(
         self, chess_board, player, opponent, depth, max_player, alpha, beta
     ):
@@ -102,6 +110,11 @@ class AlphaBetaAgentFinal(Agent):
         
         move_scores = dict()
 
+        all_moves.sort(
+            key=lambda m: self.get_move_value(chess_board, m, player), 
+            reverse=True
+        )
+        
         if player == max_player:
             # Alpha value for this node
             best_move = float("-inf")
@@ -134,7 +147,7 @@ class AlphaBetaAgentFinal(Agent):
             # If all_moves is ordered, it is in decreasing order.
             # As the min-player, we want to search the moves with the lowest
             # score first
-            for i in reversed(all_moves):
+            for i in all_moves:
                 # Exit if we exceed the time-limit
                 if time.time() - self.start_time > self.time_limit:
                     raise TimeoutError()
@@ -192,6 +205,10 @@ class AlphaBetaAgentFinal(Agent):
 
         # Evaluate each move from the root and record the scores to sort them
         move_scores = dict()
+        all_moves.sort(
+            key=lambda m: self.get_move_value(chess_board, m, player), 
+            reverse=True
+        )
 
         for mv in all_moves:
             # Exit if we exceed the time-limit
@@ -249,6 +266,16 @@ class AlphaBetaAgentFinal(Agent):
         # Size limits for caches
         self.max_moves_cache = 20000
 
+        self.weight_map = np.array([
+            [1,1,1,1,1,1,1],
+            [1,2,2,2,2,2,1],
+            [1,2,3,3,3,2,1],
+            [1,2,3,4,3,2,1],
+            [1,2,3,3,3,2,1],
+            [1,2,2,2,2,2,1],
+            [1,1,1,1,1,1,1]
+        ])
+
         # Aspiration window initial delta, and previous score to
         # initialize the window around.
         # We start delta at 2, as at the beginning of the game,
@@ -259,7 +286,10 @@ class AlphaBetaAgentFinal(Agent):
     def step(self, chess_board, player, opponent):
         self.start_time = time.time()
         # Initialize best move and score, and the last completed depth
-        best_move = None
+        valid_moves = get_valid_moves(chess_board, player)
+        if len(valid_moves) == 0:
+            return None
+        best_move = valid_moves[0]
         best_score = self.prev_score
         last_completed_depth = 0
 
@@ -319,3 +349,4 @@ class AlphaBetaAgentFinal(Agent):
         print("My AI's turn took ", time_taken, "seconds. Depth:", last_completed_depth)
 
         return best_move
+    
