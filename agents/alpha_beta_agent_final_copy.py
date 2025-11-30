@@ -39,6 +39,7 @@ class AlphaBetaAgentFinal(Agent):
         # Return the boards corresponding id
         return self.board_id_map[key]
     
+    #Function to calculate move value by pieces captured and whether it is duplication or jump --> We sort moves based on this value for checking moves
     def get_move_value(self, chess_board, move, player):
         captures = 0
         r, c = move.get_dest()
@@ -56,6 +57,7 @@ class AlphaBetaAgentFinal(Agent):
         
         return (2 * captures) + is_duplication
 
+    # Evalute the board based on heuristics
     def evaluate_board(self, chess_board, player):
         p1_mask = (chess_board == 1)
         p2_mask = (chess_board == 2)
@@ -63,7 +65,17 @@ class AlphaBetaAgentFinal(Agent):
         p1_count = np.sum(p1_mask)
         p2_count = np.sum(p2_mask)
 
+        # Survival is most important (if pieces too low, surviving is priority)
+        # If opponent has 3 or less pieces, we prioritize to go for the win by crushing him
+        if p1_count <= 3:
+            score = -300 + p1_count if player == 1 else 300 - p1_count
+            return score
+        if p2_count <= 3:
+            score = 300 - p2_count if player == 1 else -300 + p2_count
+            return score
+
         score = p1_count - p2_count if player == 1 else p2_count - p1_count
+        # Weighted scored based on wright map
         weighted_score_p1 = np.sum(self.weight_map[p1_mask])
         weighted_score_p2 = np.sum(self.weight_map[p2_mask])
         return score*0.9 + (weighted_score_p1 - weighted_score_p2)*0.1 if player == 1 else score*0.9 + (weighted_score_p2 - weighted_score_p1)*0.1
@@ -262,10 +274,11 @@ class AlphaBetaAgentFinal(Agent):
         self.board_id_map = dict()
         self.next_board_id = 0
         # Maximum time per move
-        self.time_limit = 1.95
+        self.time_limit = 1.90
         # Size limits for caches
         self.max_moves_cache = 20000
 
+        # Map of weights for each position on the board (center is better)
         self.weight_map = np.array([
             [1,1,1,1,1,1,1],
             [1,2,2,2,2,2,1],
