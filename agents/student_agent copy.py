@@ -59,26 +59,27 @@ class StudentAgent(Agent):
 
     # Evalute the board based on heuristics
     def evaluate_board(self, chess_board, player):
-        p1_mask = (chess_board == 1)
-        p2_mask = (chess_board == 2)
+      return np.sum(chess_board == player) - np.sum(chess_board == (3 - player))
+        # p1_mask = (chess_board == 1)
+        # p2_mask = (chess_board == 2)
 
-        p1_count = np.sum(p1_mask)
-        p2_count = np.sum(p2_mask)
+        # p1_count = np.sum(p1_mask)
+        # p2_count = np.sum(p2_mask)
 
-        # Survival is most important (if pieces too low, surviving is priority)
-        # If opponent has 3 or less pieces, we prioritize to go for the win by crushing him
-        if p1_count <= 3:
-            score = -1000 + p1_count if player == 1 else 1000 - p1_count
-            return score
-        if p2_count <= 3:
-            score = 1000 - p2_count if player == 1 else -1000 + p2_count
-            return score
+        # # Survival is most important (if pieces too low, surviving is priority)
+        # # If opponent has 3 or less pieces, we prioritize to go for the win by crushing him
+        # if p1_count <= 3:
+        #     score = -1000 + p1_count if player == 1 else 1000 - p1_count
+        #     return score
+        # if p2_count <= 3:
+        #     score = 1000 - p2_count if player == 1 else -1000 + p2_count
+        #     return score
 
-        score = p1_count - p2_count if player == 1 else p2_count - p1_count
-        # Weighted scored based on wright map
-        weighted_score_p1 = np.sum(self.weight_map[p1_mask])
-        weighted_score_p2 = np.sum(self.weight_map[p2_mask])
-        return score*0.9 + (weighted_score_p1 - weighted_score_p2)*0.1 if player == 1 else score*0.9 + (weighted_score_p2 - weighted_score_p1)*0.1
+        # score = p1_count - p2_count if player == 1 else p2_count - p1_count
+        # # Weighted scored based on wright map
+        # weighted_score_p1 = np.sum(self.weight_map[p1_mask])
+        # weighted_score_p2 = np.sum(self.weight_map[p2_mask])
+        # return score*0.9 + (weighted_score_p1 - weighted_score_p2)*0.1 if player == 1 else score*0.9 + (weighted_score_p2 - weighted_score_p1)*0.1
  
         
     def alpha_beta_pruning(
@@ -221,7 +222,7 @@ class StudentAgent(Agent):
 
         # If no moves can be made, return None for the move, and the previous score for the score
         if len(all_moves) == 0:
-            return None, self.prev_score
+            return None, self.score
 
         # Initialize best move and score
         best_move = all_moves[0]
@@ -304,8 +305,8 @@ class StudentAgent(Agent):
         # initialize the window around.
         # We start delta at 2, as at the beginning of the game,
         # the score cannot be changed by more than 1
-        self.delta = 6
-        self.prev_score = 0
+        self.delta = 2
+        self.score = 0
 
     def step(self, chess_board, player, opponent):
         self.start_time = time.time()
@@ -314,7 +315,8 @@ class StudentAgent(Agent):
         if len(valid_moves) == 0:
             return None
         best_move = valid_moves[0]
-        best_score = self.prev_score
+        best_score = self.score
+        self.score = np.sum(chess_board == player) - np.sum(chess_board == opponent)
         last_completed_depth = 0
 
         # Iterative deepening search
@@ -325,12 +327,12 @@ class StudentAgent(Agent):
                 break
 
             # Set the aspiration window. Our scores are bounded between -49 and 49 (inclusive)
-            alpha = max(-490000, self.prev_score - self.delta)
-            beta = min(490000, self.prev_score + self.delta)
+            alpha = max(-49, self.score - self.delta)
+            beta = min(49, self.score + self.delta)
 
             # Initialize candidate move and score
             candidate = None
-            candidate_score = self.prev_score
+            candidate_score = self.score
 
             # Use try-except to exit when we exceed the time-limit
             try:
@@ -342,12 +344,16 @@ class StudentAgent(Agent):
             # widen the window and try again. 
             # We double the delta until we get a score within the window.
             # Once again, the try-except is used to exit when we exceed the time-limit
-            if candidate_score <= alpha or candidate_score >= beta:
+            if candidate_score <= alpha:
                 try:
-                    if time.time() - self.start_time > (self.time_limit - 0.05):
-                        break
-                    
-                    candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, -490001, 490001)
+                    self.delta *= 2
+                    candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, self.score - self.delta, beta)
+                except Exception:
+                    break
+            elif candidate_score >= beta:
+                try:
+                    self.delta *= 2
+                    candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, alpha, self.score + self.delta)
                 except Exception:
                     break
             
@@ -364,10 +370,8 @@ class StudentAgent(Agent):
                 best_score = candidate_score
                 last_completed_depth = depth
 
-        # Update delta for next turn's aspiration window
-        self.prev_score = best_score
-
         time_taken = time.time() - self.start_time
         print("My AI's turn took ", time_taken, "seconds. Depth:", last_completed_depth)
 
         return best_move
+
