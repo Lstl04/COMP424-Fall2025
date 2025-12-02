@@ -9,7 +9,7 @@ from helpers import random_move, execute_move, check_endgame, get_valid_moves
 from collections import OrderedDict
 
 
-@register_agent("alpha_beta_agent_final_copy")
+@register_agent("alpha_beta_agent_final")
 class AlphaBetaAgentFinal(Agent):
     """
     A class for your implementation. Feel free to use this class to
@@ -88,7 +88,7 @@ class AlphaBetaAgentFinal(Agent):
         Recursive alpha-beta pruning function.
         """
         # Raise TimeoutError when we pass the time limit
-        if time.time() - self.start_time > self.time_limit:
+        if time.time() - self.start_time > (self.time_limit - 0.05):
             raise TimeoutError()
 
         # Return the current score of the game if depth is 0 or game over
@@ -206,7 +206,7 @@ class AlphaBetaAgentFinal(Agent):
             all_moves = self.moves[board_id]
         
         else:
-            if time.time() - self.start_time > self.time_limit:
+            if time.time() - self.start_time > (self.time_limit - 0.05):
                 raise TimeoutError()
             move_list = get_valid_moves(chess_board, player)
             move_list.sort(
@@ -285,7 +285,7 @@ class AlphaBetaAgentFinal(Agent):
         self.board_id_map = dict()
         self.next_board_id = 0
         # Maximum time per move
-        self.time_limit = 1.75
+        self.time_limit = 1.95
         # Size limits for caches
         self.max_moves_cache = 20000
 
@@ -321,11 +321,7 @@ class AlphaBetaAgentFinal(Agent):
         for depth in range(2, self.max_depth + 1):
             # Exit if we exceed the time-limit
             current_time = time.time()
-            if current_time - self.start_time > (self.time_limit / 3.5):
-                break
-                
-            # Standard timeout check
-            if current_time - self.start_time > self.time_limit:
+            if current_time - self.start_time > (self.time_limit - 0.05):
                 break
 
             # Set the aspiration window. Our scores are bounded between -49 and 49 (inclusive)
@@ -375,4 +371,3 @@ class AlphaBetaAgentFinal(Agent):
         print("My AI's turn took ", time_taken, "seconds. Depth:", last_completed_depth)
 
         return best_move
-    
