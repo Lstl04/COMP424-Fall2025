@@ -368,6 +368,4 @@ class StudentAgent(Agent):
         self.prev_score = best_score
 
         time_taken = time.time() - self.start_time
-        print("My AI's turn took ", time_taken, "seconds. Depth:", last_completed_depth)
-
         return best_move
