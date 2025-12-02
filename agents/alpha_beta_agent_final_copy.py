@@ -68,10 +68,10 @@ class AlphaBetaAgentFinal(Agent):
         # Survival is most important (if pieces too low, surviving is priority)
         # If opponent has 3 or less pieces, we prioritize to go for the win by crushing him
         if p1_count <= 3:
-            score = -300 + p1_count if player == 1 else 300 - p1_count
+            score = -1000 + p1_count if player == 1 else 1000 - p1_count
             return score
         if p2_count <= 3:
-            score = 300 - p2_count if player == 1 else -300 + p2_count
+            score = 1000 - p2_count if player == 1 else -1000 + p2_count
             return score
 
         score = p1_count - p2_count if player == 1 else p2_count - p1_count
@@ -94,7 +94,7 @@ class AlphaBetaAgentFinal(Agent):
         # Return the current score of the game if depth is 0 or game over
         done, p1, p2 = check_endgame(chess_board)
         if done:
-            return (p1-p2)*100 if max_player == 1 else (p2 - p1)*100
+            return (p1-p2)*10000 if max_player == 1 else (p2 - p1)*10000
         if depth == 0:
             return self.evaluate_board(chess_board, max_player)
         board_id = self.get_board_id(chess_board, player)
@@ -108,6 +108,10 @@ class AlphaBetaAgentFinal(Agent):
 
         else:
             move_list = get_valid_moves(chess_board, player)
+            move_list.sort(
+            key=lambda m: self.get_move_value(chess_board, m, player), 
+            reverse=True
+            )
             self.moves[board_id] = move_list
             all_moves = move_list
             # Drop the least recently used board from the moves cache if the cache is too large
@@ -122,17 +126,14 @@ class AlphaBetaAgentFinal(Agent):
         
         move_scores = dict()
 
-        all_moves.sort(
-            key=lambda m: self.get_move_value(chess_board, m, player), 
-            reverse=True
-        )
+    
         
         if player == max_player:
             # Alpha value for this node
             best_move = float("-inf")
             for i in all_moves:
                 # Exit if we exceed the time-limit
-                if time.time() - self.start_time > self.time_limit:
+                if time.time() - self.start_time > (self.time_limit - 0.05):
                     raise TimeoutError()
                 
                 # Excecute the move, and continue search from the opponent's perspective
@@ -161,7 +162,7 @@ class AlphaBetaAgentFinal(Agent):
             # score first
             for i in all_moves:
                 # Exit if we exceed the time-limit
-                if time.time() - self.start_time > self.time_limit:
+                if time.time() - self.start_time > (self.time_limit - 0.05):
                     raise TimeoutError()
                 
                 # Excecute the move, and continue search from the opponent's perspective
@@ -183,9 +184,15 @@ class AlphaBetaAgentFinal(Agent):
                 if alpha >= beta:
                     break
 
-        # Only sort each depth once. Further sorting gives diminishing returns for the cost of sorting
-        if depth == 1:
-            self.moves[board_id] = sorted(all_moves, key=lambda x: move_scores.get((x.get_src(), x.get_dest()), 0), reverse=True)
+    
+        is_max = (player == max_player)
+        default = float("-inf") if is_max else float("inf")
+        self.moves[board_id] = sorted(
+            all_moves, 
+            key=lambda x: move_scores.get((x.get_src(), x.get_dest()), default), 
+            reverse=is_max
+        )
+
         return best_move
 
     def find_best_move(self, chess_board, player, opponent, depth, alpha, beta):
@@ -199,7 +206,13 @@ class AlphaBetaAgentFinal(Agent):
             all_moves = self.moves[board_id]
         
         else:
+            if time.time() - self.start_time > self.time_limit:
+                raise TimeoutError()
             move_list = get_valid_moves(chess_board, player)
+            move_list.sort(
+            key=lambda m: self.get_move_value(chess_board, m, player), 
+            reverse=True
+            )
             self.moves[board_id] = move_list
             all_moves = move_list
             # Drop the least recently used board from the moves cache if the cache is too large
@@ -217,14 +230,10 @@ class AlphaBetaAgentFinal(Agent):
 
         # Evaluate each move from the root and record the scores to sort them
         move_scores = dict()
-        all_moves.sort(
-            key=lambda m: self.get_move_value(chess_board, m, player), 
-            reverse=True
-        )
 
         for mv in all_moves:
             # Exit if we exceed the time-limit
-            if time.time() - self.start_time > self.time_limit:
+            if time.time() - self.start_time > (self.time_limit - 0.05):
                 raise TimeoutError()
             
             # Excecute the move, and continue the search from the opponent's perspective
@@ -274,7 +283,7 @@ class AlphaBetaAgentFinal(Agent):
         self.board_id_map = dict()
         self.next_board_id = 0
         # Maximum time per move
-        self.time_limit = 1.90
+        self.time_limit = 1.75
         # Size limits for caches
         self.max_moves_cache = 20000
 
@@ -293,7 +302,7 @@ class AlphaBetaAgentFinal(Agent):
         # initialize the window around.
         # We start delta at 2, as at the beginning of the game,
         # the score cannot be changed by more than 1
-        self.delta = 2
+        self.delta = 6
         self.prev_score = 0
 
     def step(self, chess_board, player, opponent):
@@ -309,12 +318,17 @@ class AlphaBetaAgentFinal(Agent):
         # Iterative deepening search
         for depth in range(2, self.max_depth + 1):
             # Exit if we exceed the time-limit
-            if time.time() - self.start_time > self.time_limit:
+            current_time = time.time()
+            if current_time - self.start_time > (self.time_limit / 3.5):
+                break
+                
+            # Standard timeout check
+            if current_time - self.start_time > self.time_limit:
                 break
 
             # Set the aspiration window. Our scores are bounded between -49 and 49 (inclusive)
-            alpha = max(-49, self.prev_score - self.delta)
-            beta = min(49, self.prev_score + self.delta)
+            alpha = max(-490000, self.prev_score - self.delta)
+            beta = min(490000, self.prev_score + self.delta)
 
             # Initialize candidate move and score
             candidate = None
@@ -330,23 +344,20 @@ class AlphaBetaAgentFinal(Agent):
             # widen the window and try again. 
             # We double the delta until we get a score within the window.
             # Once again, the try-except is used to exit when we exceed the time-limit
-            try:
-                while candidate_score <= alpha or candidate_score >= beta:
-                  # Increase the aspiration window size by 2, and retry
-                  self.delta += 2
-                  alpha = max(-49, self.prev_score - self.delta)
-                  beta = max(49, self.prev_score + self.delta)
-                  candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, alpha, beta)
-            except Exception:
-                break
+            if candidate_score <= alpha or candidate_score >= beta:
+                try:
+                    if time.time() - self.start_time > (self.time_limit - 0.05):
+                        break
+                    
+                    candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, -490001, 490001)
+                except Exception:
+                    break
             
             # We never need delta to be greater than 10, as no turn can
             # change the score by more than 9.
             # We reset delta to 7, as a smaller delta is better for aspiration search,
             # and if we are playing against strong opponents, it is highly unlikely for us
             # to affect the score by more than 7 in a single turn.
-            if self.delta > 7:
-                self.delta = 7
 
             # If we found a candidate move within the aspiration window, update best move and score,
             # as deeper searches are more accurate

@@ -222,7 +222,7 @@ class AlphaBetaAgentFinal(Agent):
         self.board_id_map = dict()
         self.next_board_id = 0
         # Maximum time per move
-        self.time_limit = 1.97
+        self.time_limit = 1.80
         # Size limits for caches
         self.max_moves_cache = 20000
 
