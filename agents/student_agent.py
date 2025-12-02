@@ -286,7 +286,7 @@ class StudentAgent(Agent):
         self.board_id_map = dict()
         self.next_board_id = 0
         # Maximum time per move
-        self.time_limit = 1.965
+        self.time_limit = 1.95
         # Size limits for caches
         self.max_moves_cache = 20000
 
