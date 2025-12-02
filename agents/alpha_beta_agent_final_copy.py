@@ -259,6 +259,8 @@ class AlphaBetaAgentFinal(Agent):
             if move_value > best_score:
                 best_score = move_value
                 best_move = mv
+            
+            alpha = max(alpha, best_score)
 
             # Break if our original estimate of the best possible score is exceeded
             # (Aspiration search)  
