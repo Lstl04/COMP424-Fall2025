@@ -6,44 +6,372 @@ import numpy as np
 from copy import deepcopy
 import time
 from helpers import random_move, execute_move, check_endgame, get_valid_moves
+from collections import OrderedDict
+
 
 @register_agent("student_agent")
 class StudentAgent(Agent):
-  """
-  A class for your implementation. Feel free to use this class to
-  add any helper functionalities needed for your agent.
-  """
-
-  def __init__(self):
-    super(StudentAgent, self).__init__()
-    self.name = "StudentAgent"
-
-  def step(self, chess_board, player, opponent):
     """
-    Implement the step function of your agent here.
-    You can use the following variables to access the chess board:
-    - chess_board: a numpy array of shape (board_size, board_size)
-      where 0 represents an empty spot, 1 represents Player 1's discs (Blue),
-      and 2 represents Player 2's discs (Brown).
-    - player: 1 if this agent is playing as Player 1 (Blue), or 2 if playing as Player 2 (Brown).
-    - opponent: 1 if the opponent is Player 1 (Blue), or 2 if the opponent is Player 2 (Brown).
-
-    You should return a tuple (r,c), where (r,c) is the position where your agent
-    wants to place the next disc. Use functions in helpers to determine valid moves
-    and more helpful tools.
-
-    Please check the sample implementation in agents/random_agent.py or agents/human_agent.py for more details.
+    A class for your implementation. Feel free to use this class to
+    add any helper functionalities needed for your agent.
     """
 
-    # Some simple code to help you with timing. Consider checking 
-    # time_taken during your search and breaking with the best answer
-    # so far when it nears 2 seconds.
-    start_time = time.time()
-    time_taken = time.time() - start_time
+    def board_key(self, board):
+        """
+        Create a unique key for the board state using its byte representation.
+        This helps in identifying identical board states efficiently.
+        """
+        array = np.ascontiguousarray(board)
+        return array.tobytes()
 
-    print("My AI's turn took ", time_taken, "seconds.")
+    def get_board_id(self, board, player):
+        """
+        Create or retrieve a unique ID for the given board state and player.
+        This ID is used for caching and transposition table lookups.
+        """
+        # Two boards would need different ID's if it is a different player moving from there
+        key = (self.board_key(board), player)
+        # If no id has been generated for this board yet, generate one
+        if key not in self.board_id_map:
+            self.board_id_map[key] = self.next_board_id
+            self.next_board_id += 1
 
-    # Dummy return (you should replace this with your actual logic)
-    # Returning a random valid move as an example
-    return random_move(chess_board,player)
+        # Return the boards corresponding id
+        return self.board_id_map[key]
+    
+    #Function to calculate move value by pieces captured and whether it is duplication or jump --> We sort moves based on this value for checking moves
+    def get_move_value(self, chess_board, move, player):
+        captures = 0
+        r, c = move.get_dest()
+        opponent = 3 - player
+        for dr in [-1, 0, 1]:
+            for dc in [-1, 0, 1]:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < 7 and 0 <= nc < 7:
+                    if chess_board[nr][nc] == opponent:
+                        captures += 1
+
+        sr, sc = move.get_src()
+        dist = max(abs(r - sr), abs(c - sc))
+        is_duplication = 1 if dist == 1 else 0
+        
+        return (2 * captures) + is_duplication
+
+    # Evalute the board based on heuristics
+    def evaluate_board(self, chess_board, player):
+      return np.sum(chess_board == player) - np.sum(chess_board == (3 - player))
+        # p1_mask = (chess_board == 1)
+        # p2_mask = (chess_board == 2)
+
+        # p1_count = np.sum(p1_mask)
+        # p2_count = np.sum(p2_mask)
+
+        # # Survival is most important (if pieces too low, surviving is priority)
+        # # If opponent has 3 or less pieces, we prioritize to go for the win by crushing him
+        # if p1_count <= 3:
+        #     score = -1000 + p1_count if player == 1 else 1000 - p1_count
+        #     return score
+        # if p2_count <= 3:
+        #     score = 1000 - p2_count if player == 1 else -1000 + p2_count
+        #     return score
+
+        # score = p1_count - p2_count if player == 1 else p2_count - p1_count
+        # # Weighted scored based on wright map
+        # weighted_score_p1 = np.sum(self.weight_map[p1_mask])
+        # weighted_score_p2 = np.sum(self.weight_map[p2_mask])
+        # return score*0.9 + (weighted_score_p1 - weighted_score_p2)*0.1 if player == 1 else score*0.9 + (weighted_score_p2 - weighted_score_p1)*0.1
+ 
+        
+    def alpha_beta_pruning(
+        self, chess_board, player, opponent, depth, max_player, alpha, beta
+    ):
+        """
+        Recursive alpha-beta pruning function.
+        """
+        # Raise TimeoutError when we pass the time limit
+        if time.time() - self.start_time > (self.time_limit - 0.05):
+            raise TimeoutError()
+
+        # Return the current score of the game if depth is 0 or game over
+        done, p1, p2 = check_endgame(chess_board)
+        if done:
+            return (p1-p2)*10000 if max_player == 1 else (p2 - p1)*10000
+        if depth == 0:
+            return self.evaluate_board(chess_board, max_player)
+        board_id = self.get_board_id(chess_board, player)
+
+        # Load the list of moves from this board from cache if available
+        # Load the list of move to the cache if not already available
+        if board_id in self.moves:
+            # Move the used board_id to the end to mark it recently used
+            self.moves.move_to_end(board_id)
+            all_moves = self.moves[board_id]
+
+        else:
+            move_list = get_valid_moves(chess_board, player)
+            move_list.sort(
+            key=lambda m: self.get_move_value(chess_board, m, player), 
+            reverse=True
+            )
+            self.moves[board_id] = move_list
+            all_moves = move_list
+            # Drop the least recently used board from the moves cache if the cache is too large
+            if len(self.moves) > self.max_moves_cache:
+                self.moves.popitem(last=False)
+
+        # If there are no valid moves, continue the search from the opponent's perspective
+        if len(all_moves) == 0:
+            return self.alpha_beta_pruning(
+                chess_board, opponent, player, depth - 1, max_player, alpha, beta
+            )
+        
+        move_scores = dict()
+
+    
+        
+        if player == max_player:
+            # Alpha value for this node
+            best_move = float("-inf")
+            for i in all_moves:
+                # Exit if we exceed the time-limit
+                if time.time() - self.start_time > (self.time_limit - 0.05):
+                    raise TimeoutError()
+                
+                # Excecute the move, and continue search from the opponent's perspective
+                temp_board = chess_board.copy()
+                execute_move(temp_board, i, player)
+                move_value = self.alpha_beta_pruning(
+                    temp_board, opponent, player, depth - 1, max_player, alpha, beta
+                )
+
+                move_scores[(i.get_src(), i.get_dest())] = move_value
+
+                # Keep track of the best move found so far (from the max-player's perspective),
+                # and update alpha for this node if we found a better move
+                if move_value > best_move:
+                    best_move = move_value
+                alpha = max(alpha, best_move)
+
+                # Break out of the loop if we have an inconsistency
+                if alpha >= beta:
+                    break
+        else:
+            # Beta value for this node
+            best_move = float("inf")
+            # If all_moves is ordered, it is in decreasing order.
+            # As the min-player, we want to search the moves with the lowest
+            # score first
+            for i in all_moves:
+                # Exit if we exceed the time-limit
+                if time.time() - self.start_time > (self.time_limit - 0.05):
+                    raise TimeoutError()
+                
+                # Excecute the move, and continue search from the opponent's perspective
+                temp_board = chess_board.copy()
+                execute_move(temp_board, i, player)
+                move_value = self.alpha_beta_pruning(
+                    temp_board, opponent, player, depth - 1, max_player, alpha, beta
+                )
+
+                move_scores[(i.get_src(), i.get_dest())] = move_value
+
+                # Keep track of the best move found so far (from the min-player's perspective),
+                # and update beta for this node if we found a better move
+                if move_value < best_move:
+                    best_move = move_value
+                beta = min(beta, best_move)
+
+                # Break out of the loop if we have an inconsistency
+                if alpha >= beta:
+                    break
+
+    
+        is_max = (player == max_player)
+        default = float("-inf") if is_max else float("inf")
+        self.moves[board_id] = sorted(
+            all_moves, 
+            key=lambda x: move_scores.get((x.get_src(), x.get_dest()), default), 
+            reverse=is_max
+        )
+
+        return best_move
+
+    def find_best_move(self, chess_board, player, opponent, depth, alpha, beta):
+        board_id = self.get_board_id(chess_board, player)
+
+        # Load the list of moves from this board from cache if available
+        # Load the list of move to the cache if not already available
+        if board_id in self.moves:
+            # Move the used board_id to the end to mark it recently used
+            self.moves.move_to_end(board_id)
+            all_moves = self.moves[board_id]
+        
+        else:
+            if time.time() - self.start_time > (self.time_limit - 0.05):
+                raise TimeoutError()
+            move_list = get_valid_moves(chess_board, player)
+            move_list.sort(
+            key=lambda m: self.get_move_value(chess_board, m, player), 
+            reverse=True
+            )
+            self.moves[board_id] = move_list
+            all_moves = move_list
+            # Drop the least recently used board from the moves cache if the cache is too large
+            if len(self.moves) > self.max_moves_cache:
+                self.moves.popitem(last=False)
+
+        # If no moves can be made, return None for the move, and the previous score for the score
+        if len(all_moves) == 0:
+            return None, self.score
+
+        # Initialize best move and score
+        best_move = all_moves[0]
+        best_score = float("-inf")
+        max_player = player
+
+        # Evaluate each move from the root and record the scores to sort them
+        move_scores = dict()
+
+        for mv in all_moves:
+            # Exit if we exceed the time-limit
+            if time.time() - self.start_time > (self.time_limit - 0.05):
+                raise TimeoutError()
+            
+            # Excecute the move, and continue the search from the opponent's perspective
+            temp_board = chess_board.copy()
+            execute_move(temp_board, mv, player)
+
+            # Note that we use the alpha and beta values provided to this function,
+            # as we do aspiration search
+            move_value = self.alpha_beta_pruning(
+                temp_board,
+                opponent,
+                player,
+                depth - 1,
+                max_player,
+                alpha,
+                beta,
+            )
+
+            # Convert the move to a tuple for hashing, and store the move's score
+            move_scores[(mv.get_src(), mv.get_dest())] = move_value
+            
+            # Update best move if we found a better one
+            if move_value > best_score:
+                best_score = move_value
+                best_move = mv
+            
+            alpha = max(alpha, best_score)
+
+            # Break if our original estimate of the best possible score is exceeded
+            # (Aspiration search)  
+            if best_score >= beta:
+                break
+
+        # Sort the moves for additional depth iterations, and possible future revisits.
+        self.moves[board_id] = sorted(all_moves, key=lambda x: move_scores.get((x.get_src(), x.get_dest()), 0), reverse=True)
+      
+        return best_move, best_score
+
+    def __init__(self):
+        super(StudentAgent, self).__init__()
+        self.name = "StudentAgent"
+        # Don't really need to set a max depth since we use iterative deepening and terminate
+        # based on the time, but it is not like we will reach this depth anyway
+        self.max_depth = 1000
+        self.count = 0
+        # caches, some with LRU (least recently used) eviction
+        # Inspired by COMP 310 course at McGill
+        self.moves = OrderedDict()
+        self.board_id_map = dict()
+        self.next_board_id = 0
+        # Maximum time per move
+        self.time_limit = 1.95
+        # Size limits for caches
+        self.max_moves_cache = 20000
+
+        # Map of weights for each position on the board (center is better)
+        self.weight_map = np.array([
+            [1,1,1,1,1,1,1],
+            [1,2,2,2,2,2,1],
+            [1,2,3,3,3,2,1],
+            [1,2,3,4,3,2,1],
+            [1,2,3,3,3,2,1],
+            [1,2,2,2,2,2,1],
+            [1,1,1,1,1,1,1]
+        ])
+
+        # Aspiration window initial delta, and previous score to
+        # initialize the window around.
+        # We start delta at 2, as at the beginning of the game,
+        # the score cannot be changed by more than 1
+        self.delta = 2
+        self.score = 0
+
+    def step(self, chess_board, player, opponent):
+        self.start_time = time.time()
+        # Initialize best move and score, and the last completed depth
+        valid_moves = get_valid_moves(chess_board, player)
+        if len(valid_moves) == 0:
+            return None
+        best_move = valid_moves[0]
+        best_score = self.score
+        self.score = np.sum(chess_board == player) - np.sum(chess_board == opponent)
+        last_completed_depth = 0
+
+        # Iterative deepening search
+        for depth in range(2, self.max_depth + 1):
+            # Exit if we exceed the time-limit
+            current_time = time.time()
+            if current_time - self.start_time > (self.time_limit - 0.05):
+                break
+
+            # Set the aspiration window. Our scores are bounded between -49 and 49 (inclusive)
+            alpha = max(-49, self.score - self.delta)
+            beta = min(49, self.score + self.delta)
+
+            # Initialize candidate move and score
+            candidate = None
+            candidate_score = self.score
+
+            # Use try-except to exit when we exceed the time-limit
+            try:
+                candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, alpha, beta)
+            except Exception:
+                break
+
+            # If the candidate score is not inside the aspiration window, we need to
+            # widen the window and try again. 
+            # We double the delta until we get a score within the window.
+            # Once again, the try-except is used to exit when we exceed the time-limit
+            if candidate_score <= alpha:
+                try:
+                    self.delta *= 2
+                    candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, self.score - self.delta, beta)
+                except Exception:
+                    break
+            elif candidate_score >= beta:
+                try:
+                    self.delta *= 2
+                    candidate, candidate_score = self.find_best_move(chess_board, player, opponent, depth, alpha, self.score + self.delta)
+                except Exception:
+                    break
+            
+            # We never need delta to be greater than 10, as no turn can
+            # change the score by more than 9.
+            # We reset delta to 7, as a smaller delta is better for aspiration search,
+            # and if we are playing against strong opponents, it is highly unlikely for us
+            # to affect the score by more than 7 in a single turn.
+
+            # If we found a candidate move within the aspiration window, update best move and score,
+            # as deeper searches are more accurate
+            if candidate is not None:
+                best_move = candidate
+                best_score = candidate_score
+                last_completed_depth = depth
+
+        time_taken = time.time() - self.start_time
+        print("My AI's turn took ", time_taken, "seconds. Depth:", last_completed_depth)
+
+        return best_move
 
