@@ -9,7 +9,7 @@ from helpers import random_move, execute_move, check_endgame, get_valid_moves
 from collections import OrderedDict
 
 
-@register_agent("alpha_beta_agent_final")
+@register_agent("alpha_beta_agent_final_copy")
 class AlphaBetaAgentFinal(Agent):
     """
     A class for your implementation. Feel free to use this class to
